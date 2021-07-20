@@ -1,0 +1,176 @@
+Задание 4.1
+select city, count(airport_code)
+from DST_PROJECT.airports
+group by 1
+order by 2 desc
+limit 2
+
+
+
+Задание 4.2
+SELECT count(DISTINCT status)
+FROM dst_project.flights
+
+SELECT count(status)
+FROM dst_project.flights
+WHERE status = 'Departed'
+
+SELECT count(seat_no)
+FROM dst_project.aircrafts pl
+JOIN dst_project.seats se ON pl.aircraft_code=se.aircraft_code
+WHERE pl.model = 'Boeing 777-300'
+
+SELECT status,
+       count(flight_id)
+FROM dst_project.flights
+WHERE (scheduled_departure BETWEEN '2017-03-31' AND '2017-09-01')
+  AND (scheduled_arrival BETWEEN '2017-04-01' AND '2017-09-02')
+GROUP BY 1
+ORDER BY 2 DESC
+
+
+
+Задание 4.3
+SELECT count(flight_id)
+FROM dst_project.flights
+WHERE status = 'Cancelled'
+
+SELECT model
+FROM dst_project.aircrafts
+ORDER BY 1
+
+SELECT timezone,
+       count(airport_code)
+FROM dst_project.airports
+GROUP BY 1
+ORDER BY 1
+
+SELECT flight_id,
+       actual_arrival - scheduled_arrival
+FROM dst_project.flights
+WHERE status = 'Arrived'
+ORDER BY 2 DESC
+
+
+
+Задание 4.4
+SELECT min(scheduled_departure)
+FROM dst_project.flights
+
+SELECT EXTRACT(EPOCH
+               FROM (scheduled_arrival - scheduled_departure)) / 60,
+       arrival_airport,
+       departure_airport
+FROM dst_project.flights
+ORDER BY 1 DESC
+
+SELECT sum(EXTRACT(EPOCH
+                   FROM (scheduled_arrival - scheduled_departure)) / 60) / count(flight_id)
+FROM dst_project.flights
+ORDER BY 1 DESC
+
+
+
+Задание 4.5
+SELECT se.fare_conditions,
+       count(se.seat_no)
+FROM dst_project.seats AS se
+WHERE se.aircraft_code = 'SU9'
+GROUP BY 1
+ORDER BY 2 DESC
+
+SELECT min(total_amount)
+FROM dst_project.bookings
+
+SELECT seat_no
+FROM dst_project.boarding_passes bo
+JOIN dst_project.tickets ti ON bo.ticket_no = ti.ticket_no
+WHERE passenger_id = '4313 788533'
+
+
+
+Задание 5.1
+SELECT count(flight_id)
+FROM dst_project.flights fl
+WHERE arrival_airport = 'AAQ'
+  AND fl.status = 'Arrived'
+  AND (scheduled_arrival BETWEEN '2017-01-01' AND '2018-01-01')
+
+SELECT count(flight_id)
+FROM dst_project.flights fl
+WHERE fl.departure_airport = 'AAQ'
+  AND (fl.scheduled_departure BETWEEN '2017-01-01' AND '2017-03-01'
+       OR fl.scheduled_departure BETWEEN '2017-12-01' AND '2018-01-01')
+
+SELECT count(flight_id)
+FROM dst_project.flights fl
+WHERE fl.departure_airport = 'AAQ'
+  AND fl.status = 'Cancelled'
+
+SELECT count(flight_id)
+FROM dst_project.flights fl
+JOIN dst_project.airports ai ON fl.arrival_airport = ai.airport_code
+WHERE fl.departure_airport = 'AAQ'
+  AND ai.city != 'Moscow'
+
+SELECT ac.model,
+       count(DISTINCT se.seat_no)
+FROM dst_project.flights fl
+JOIN dst_project.aircrafts ac ON fl.aircraft_code = ac.aircraft_code
+JOIN dst_project.seats se ON fl.aircraft_code = se.aircraft_code
+WHERE fl.departure_airport = 'AAQ'
+GROUP BY 1
+
+
+
+
+ИТОГОВЫЙ ЗАПРОС
+WITH seat_table AS
+  (SELECT fl.flight_id,
+          ac.model,
+          count(DISTINCT se.seat_no) AS seat_amount
+   FROM dst_project.flights fl
+   JOIN dst_project.aircrafts ac ON fl.aircraft_code = ac.aircraft_code
+   JOIN dst_project.seats se ON fl.aircraft_code = se.aircraft_code
+   WHERE fl.departure_airport = 'AAQ'
+   GROUP BY 1,
+            2),
+     amount_table AS
+  (SELECT flight_id,
+          sum(amount) total_amount
+   FROM dst_project.ticket_flights
+   GROUP BY 1),
+     ticket_table AS
+  (SELECT tf.flight_id,
+          count(tf.ticket_no) AS tickets_sold,
+          count(CASE
+                    WHEN tf.fare_conditions = 'Economy' THEN tf.ticket_no
+                END) AS tickets_economy,
+          count(CASE
+                    WHEN tf.fare_conditions = 'Business' THEN tf.ticket_no
+                END) AS ticket_business
+   FROM dst_project.ticket_flights AS tf
+   GROUP BY 1)
+SELECT fli.flight_id,
+       fli.flight_no,
+       fli.departure_airport,
+       fli.arrival_airport,
+       fli.scheduled_departure departure,
+       EXTRACT(EPOCH
+               FROM (fli.actual_arrival - fli.actual_departure)) / 60 AS actual_time,
+       seat_table.model,
+       seat_table.seat_amount,
+       ticket_table.tickets_sold,
+       ticket_table.tickets_economy,
+       ticket_table.ticket_business,
+       amount_table.total_amount
+FROM dst_project.flights fli
+LEFT JOIN seat_table ON fli.flight_id = seat_table.flight_id
+LEFT JOIN amount_table ON fli.flight_id = amount_table.flight_id
+LEFT JOIN ticket_table ON fli.flight_id = ticket_table.flight_id
+WHERE departure_airport = 'AAQ'
+  AND (date_trunc('month', scheduled_departure) in ('2016-12-01',
+                                                    '2017-01-01',
+                                                    '2017-02-01'))
+  AND status not in ('Cancelled')
+ORDER BY 1
